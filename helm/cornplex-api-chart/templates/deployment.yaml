@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.app }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app }}
+    spec:
+      # securityContext: use securityContext for non-root-user, when we get an error related to user permission
+      securityContext:
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+      containers:
+        - name: {{ .Values.app }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+          ports:
+            - containerPort: {{ .Values.ports.containerPort }}
+          # Environment variable section
+          env:
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote}}
+            {{- end }}
+            {{- if .Values.deployment.extraEnvs }}
+{{ toYaml .Values.deployment.extraEnvs | indent 12 }}
+            {{- end }}
+          {{- if .Values.deployment.livenessProbe.enabled }}
+          volumeMounts:
+            {{- if .Values.deployment.volumeMounts }}
+{{ toYaml .Values.deployment.volumeMounts | indent 12}}
+            {{- end }}
+      volumes:
+      {{- if .Values.volumes }}
+{{ toYaml .Values.volumes | indent 8}}
+      {{- end }}
+
+#           livenessProbe:
+#             {{- if .Values.deployment.livenessProbe.echoCmdCheck }}
+#             exec:
+#               command:
+#               - echo
+#               - echoLivenessCheckHealthy
+#             {{- else if .Values.deployment.livenessProbe.path }}
+#             httpGet:
+#               {{- if .Values.deployment.livenessProbe.appendIngressPath}}
+#               path: "{{ include "cornplex-api-chart.ingressPathClean" . }}{{ .Values.deployment.livenessProbe.path }}"
+#               {{- else }}
+#               path: "{{ .Values.deployment.livenessProbe.path }}"
+#               {{- end}}
+#               port: {{ default .Values.service.targetPort .Values.deployment.livenessProbe.port }}
+#               scheme: HTTP
+#               {{- if .Values.deployment.livenessProbe.httpHeaders }}
+#               httpHeaders:
+# {{ toYaml .Values.deployment.livenessProbe.httpHeaders | indent 16 }}
+#               {{- end }}
+#             {{- else }}
+#             tcpSocket:
+#               port: {{ default .Values.service.targetPort .Values.deployment.livenessProbe.port }}
+#             {{- end }}
+#             initialDelaySeconds: {{ .Values.deployment.livenessProbe.initialDelaySeconds }}
+#             periodSeconds: {{ .Values.deployment.livenessProbe.periodSeconds }}
+#             timeoutSeconds: {{ .Values.deployment.livenessProbe.timeoutSeconds }}
+#             successThreshold: {{ .Values.deployment.livenessProbe.successThreshold }}
+#             failureThreshold: {{ .Values.deployment.livenessProbe.failureThreshold }}
+#           {{- end }}
+#  {{- if .Values.deployment.readinessProbe.enabled }}
+#           readinessProbe:
+#             {{- if .Values.deployment.readinessProbe.echoCmdCheck }}
+#             exec:
+#               command:
+#               - echo
+#               - echoReadinessCheckHealthy
+#             {{- else if .Values.deployment.readinessProbe.path }}
+#             httpGet:
+#               {{- if .Values.deployment.readinessProbe.appendIngressPath }}
+#               path: "{{ include "cornplex-api-chart.ingressPathClean" . }}{{ .Values.deployment.readinessProbe.path }}"
+#               {{- else }}
+#               path: "{{ .Values.deployment.readinessProbe.path }}"
+#               {{- end }}
+#               port: {{ default .Values.service.targetPort .Values.deployment.readinessProbe.port }}
+#               scheme: HTTP
+#               {{- if .Values.deployment.readinessProbe.httpHeaders }}
+#               httpHeaders:
+# {{ toYaml .Values.deployment.readinessProbe.httpHeaders | indent 16 }}
+#               {{- end }}
+#             {{- else }}
+#             tcpSocket:
+#               port: {{ default .Values.service.targetPort .Values.deployment.readinessProbe.port }}
+#             {{- end }}
+#             initialDelaySeconds: {{ .Values.deployment.readinessProbe.initialDelaySeconds }}
+#             periodSeconds: {{ .Values.deployment.readinessProbe.periodSeconds }}
+#             timeoutSeconds: {{ .Values.deployment.readinessProbe.timeoutSeconds }}
+#             successThreshold: {{ .Values.deployment.readinessProbe.successThreshold }}
+#             failureThreshold: {{ .Values.deployment.readinessProbe.failureThreshold }}
+#           {{- end }}
+
+          # env:
+          #   - name: ASPNETCORE_URLS
+          #     value: http://+:5000
+      # # imagePullSecrets: use imagePullSecrets when we use private container
+      # imagePullSecrets:
+      #   - name: cornplex-api-secret
+
+---
+# NOTE: Only for testing - NOT IN USE
+# This secret is used to set the initial credentials of the container.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.app }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.app }}
+    chart: "storageos.chart"
+type: "kubernetes.io/basic-auth"
+# type: Opaque
+    # app: "storageos.name"
+    # chart: "storageos.chart"
+# type: "kubernetes.io/storageos"
+data:
+  username: {{ default "" .Values.secrets.api.username | b64enc | quote }}
+  password: {{ default "" .Values.secrets.api.password | b64enc | quote }}
+  KeyVault: {{ default "" .Values.secrets.api.KeyVault | toJson | b64enc | quote }}
